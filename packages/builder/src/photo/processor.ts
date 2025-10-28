@@ -1,7 +1,8 @@
 import type { _Object } from '@aws-sdk/client-s3'
 
-import type { AfilmoryBuilder } from '../builder/builder.js'
+import type { AfilmoryBuilder, BuilderOptions } from '../builder/builder.js'
 import { logger } from '../logger/index.js'
+import type { PluginRunState } from '../plugins/manager.js'
 import type { PhotoManifestItem, ProcessPhotoResult } from '../types/photo.js'
 import type { PhotoProcessingContext } from './image-pipeline.js'
 import { processPhotoWithPipeline } from './image-pipeline.js'
@@ -26,6 +27,10 @@ export async function processPhoto(
   livePhotoMap: Map<string, _Object>,
   options: PhotoProcessorOptions,
   builder: AfilmoryBuilder,
+  pluginRuntime: {
+    runState: PluginRunState
+    builderOptions: BuilderOptions
+  },
 ): Promise<ProcessPhotoResult> {
   const key = obj.Key
   if (!key) {
@@ -48,8 +53,9 @@ export async function processPhoto(
     existingItem,
     livePhotoMap,
     options,
+    pluginData: {},
   }
 
   // 使用处理管道
-  return await processPhotoWithPipeline(context, builder)
+  return await processPhotoWithPipeline(context, builder, pluginRuntime)
 }

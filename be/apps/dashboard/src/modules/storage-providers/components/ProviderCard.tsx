@@ -66,9 +66,6 @@ export const ProviderCard: FC<ProviderCardProps> = ({
       case 'local': {
         return cfg.path || 'Not configured'
       }
-      case 'minio': {
-        return cfg.endpoint || 'Not configured'
-      }
       case 'eagle': {
         return cfg.libraryPath || 'Not configured'
       }

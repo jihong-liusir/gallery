@@ -8,6 +8,7 @@ export type {
 } from './interfaces.js'
 
 // 导出工厂类
+export type { StorageProviderFactory } from './factory.js'
 export { StorageFactory } from './factory.js'
 
 // 导出管理器

@@ -1,6 +1,9 @@
 export * from '../../utils/src/u8array.js'
 export type { BuilderOptions, BuilderResult } from './builder/index.js'
 export { AfilmoryBuilder } from './builder/index.js'
+export { createDefaultBuilderConfig } from './config/defaults.js'
+export type { LoadBuilderConfigOptions } from './config/index.js'
+export { defineBuilderConfig, loadBuilderConfig } from './config/index.js'
 export type {
   PhotoProcessingContext,
   ProcessedImageData,
@@ -12,6 +15,28 @@ export {
   processPhotoWithPipeline,
 } from './photo/image-pipeline.js'
 export type { PhotoProcessorOptions } from './photo/processor.js'
+export type { GitHubRepoSyncPluginOptions } from './plugins/github-repo-sync.js'
+export {
+  createGitHubRepoSyncPlugin,
+  default as githubRepoSyncPlugin,
+} from './plugins/github-repo-sync.js'
+export type { EagleStoragePluginOptions } from './plugins/storage/eagle.js'
+export { default as eagleStoragePlugin } from './plugins/storage/eagle.js'
+export type { GitHubStoragePluginOptions } from './plugins/storage/github.js'
+export { default as githubStoragePlugin } from './plugins/storage/github.js'
+export type { LocalStoragePluginOptions } from './plugins/storage/local.js'
+export { default as localStoragePlugin } from './plugins/storage/local.js'
+export type { S3StoragePluginOptions } from './plugins/storage/s3.js'
+export { default as s3StoragePlugin } from './plugins/storage/s3.js'
+export type {
+  BuilderPlugin,
+  BuilderPluginConfigEntry,
+  BuilderPluginEvent,
+  BuilderPluginEventPayloads,
+  BuilderPluginHookContext,
+  BuilderPluginHooks,
+  BuilderPluginReference,
+} from './plugins/types.js'
 export type {
   ProgressCallback,
   ScanProgress,
@@ -20,7 +45,7 @@ export type {
   StorageProvider,
 } from './storage/index.js'
 export { StorageFactory, StorageManager } from './storage/index.js'
-export type { BuilderConfig } from './types/config.js'
+export type { BuilderConfig, BuilderConfigInput } from './types/config.js'
 export type {
   AfilmoryManifest,
   CameraInfo,

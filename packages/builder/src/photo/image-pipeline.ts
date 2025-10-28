@@ -5,14 +5,15 @@ import { compressUint8Array } from '@afilmory/utils'
 import type { _Object } from '@aws-sdk/client-s3'
 import sharp from 'sharp'
 
-import type { AfilmoryBuilder } from '../builder/builder.js'
+import type { AfilmoryBuilder, BuilderOptions } from '../builder/builder.js'
 import {
   convertBmpToJpegSharpInstance,
   getImageMetadataWithSharp,
   isBitmap,
   preprocessImageBuffer,
 } from '../image/processor.js'
-import type { PhotoManifestItem } from '../types/photo.js'
+import type { PluginRunState } from '../plugins/manager.js'
+import type { PhotoManifestItem, ProcessPhotoResult } from '../types/photo.js'
 import { shouldProcessPhoto } from './cache-manager.js'
 import {
   processExifData,
@@ -36,6 +37,7 @@ export interface PhotoProcessingContext {
   existingItem: PhotoManifestItem | undefined
   livePhotoMap: Map<string, _Object>
   options: PhotoProcessorOptions
+  pluginData: Record<string, unknown>
 }
 
 /**
@@ -255,14 +257,21 @@ export async function executePhotoProcessingPipeline(
 export async function processPhotoWithPipeline(
   context: PhotoProcessingContext,
   builder: AfilmoryBuilder,
+  runtime: { runState: PluginRunState; builderOptions: BuilderOptions },
 ): Promise<{
   item: PhotoManifestItem | null
   type: 'new' | 'processed' | 'skipped' | 'failed'
+  pluginData: Record<string, unknown>
 }> {
   const { photoKey, existingItem, obj, options } = context
   const loggers = getGlobalLoggers()
 
   const photoId = await generatePhotoId(photoKey, builder)
+
+  await builder.emitPluginEvent(runtime.runState, 'beforePhotoProcess', {
+    options: runtime.builderOptions,
+    context,
+  })
 
   // 检查是否需要处理
   const { shouldProcess, reason } = await shouldProcessPhoto(
@@ -274,7 +283,17 @@ export async function processPhotoWithPipeline(
 
   if (!shouldProcess) {
     loggers.image.info(`⏭️ 跳过处理 (${reason}): ${photoKey}`)
-    return { item: existingItem!, type: 'skipped' }
+    const result = {
+      item: existingItem ?? null,
+      type: 'skipped' as const,
+      pluginData: context.pluginData,
+    }
+    await builder.emitPluginEvent(runtime.runState, 'afterPhotoProcess', {
+      options: runtime.builderOptions,
+      context,
+      result,
+    })
+    return result
   }
 
   // 记录处理原因
@@ -285,15 +304,36 @@ export async function processPhotoWithPipeline(
     loggers.image.info(`🔄 更新照片 (${reason})：${photoKey}`)
   }
 
-  // 执行处理管道
-  const processedItem = await executePhotoProcessingPipeline(context, builder)
+  let processedItem: PhotoManifestItem | null = null
+  let resultType: ProcessPhotoResult['type'] = isNewPhoto ? 'new' : 'processed'
 
-  if (!processedItem) {
-    return { item: null, type: 'failed' }
+  try {
+    processedItem = await executePhotoProcessingPipeline(context, builder)
+    if (!processedItem) {
+      resultType = 'failed'
+    }
+  } catch (error) {
+    await builder.emitPluginEvent(runtime.runState, 'photoProcessError', {
+      options: runtime.builderOptions,
+      context,
+      error,
+    })
+    loggers.image.error(`❌ 处理过程中发生异常：${photoKey}`, error)
+    processedItem = null
+    resultType = 'failed'
   }
 
-  return {
+  const result = {
     item: processedItem,
-    type: isNewPhoto ? 'new' : 'processed',
+    type: resultType,
+    pluginData: context.pluginData,
   }
+
+  await builder.emitPluginEvent(runtime.runState, 'afterPhotoProcess', {
+    options: runtime.builderOptions,
+    context,
+    result,
+  })
+
+  return result
 }

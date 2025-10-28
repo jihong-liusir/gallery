@@ -27,9 +27,6 @@
       "@pkg": [
         "./package.json"
       ],
-      "@builder": [
-        "../../builder.config.ts"
-      ],
       "@env": [
         "../../env.ts"
       ]

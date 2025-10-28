@@ -30,9 +30,6 @@
       "@config": [
         "../../site.config.ts"
       ],
-      "@builder": [
-        "../../builder.config.ts"
-      ],
       "@env": [
         "../../env.ts"
       ],

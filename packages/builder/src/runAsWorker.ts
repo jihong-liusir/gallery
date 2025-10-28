@@ -1,7 +1,9 @@
 import process from 'node:process'
 import { deserialize } from 'node:v8'
 
+import type { BuilderOptions } from './builder/builder.js'
 import { AfilmoryBuilder } from './builder/builder.js'
+import type { PluginRunState } from './plugins/manager.js'
 import type { StorageObject } from './storage/interfaces'
 import type { BuilderConfig } from './types/config.js'
 import type { PhotoManifestItem } from './types/photo'
@@ -40,6 +42,7 @@ export async function runAsWorker() {
   let existingManifestMap: Map<string, PhotoManifestItem>
   let livePhotoMap: Map<string, StorageObject>
   let builder: AfilmoryBuilder
+  let pluginRunState: PluginRunState
 
   // 初始化函数，从主进程接收共享数据
   const initializeWorker = async (
@@ -56,6 +59,8 @@ export async function runAsWorker() {
     existingManifestMap = sharedData.existingManifestMap
     livePhotoMap = sharedData.livePhotoMap
     builder = new AfilmoryBuilder(sharedData.builderConfig)
+    await builder.ensurePluginsReady()
+    pluginRunState = builder.createPluginRunState()
 
     isInitialized = true
   }
@@ -104,6 +109,13 @@ export async function runAsWorker() {
         isForceThumbnails: process.env.FORCE_THUMBNAILS === 'true',
       }
 
+      const builderOptions: BuilderOptions = {
+        isForceMode: processorOptions.isForceMode,
+        isForceManifest: processorOptions.isForceManifest,
+        isForceThumbnails: processorOptions.isForceThumbnails,
+        concurrencyLimit: undefined,
+      }
+
       // 处理照片
       const result = await processPhoto(
         legacyObj,
@@ -114,6 +126,10 @@ export async function runAsWorker() {
         legacyLivePhotoMap,
         processorOptions,
         builder,
+        {
+          runState: pluginRunState,
+          builderOptions,
+        },
       )
 
       // 发送结果回主进程
@@ -150,6 +166,17 @@ export async function runAsWorker() {
 
       const results: TaskResult[] = []
       const taskPromises: Promise<void>[] = []
+      const batchProcessorOptions = {
+        isForceMode: process.env.FORCE_MODE === 'true',
+        isForceManifest: process.env.FORCE_MANIFEST === 'true',
+        isForceThumbnails: process.env.FORCE_THUMBNAILS === 'true',
+      }
+      const batchBuilderOptions: BuilderOptions = {
+        isForceMode: batchProcessorOptions.isForceMode,
+        isForceManifest: batchProcessorOptions.isForceManifest,
+        isForceThumbnails: batchProcessorOptions.isForceThumbnails,
+        concurrencyLimit: undefined,
+      }
 
       // 创建所有任务的并发执行 Promise
       for (const task of message.tasks) {
@@ -185,12 +212,12 @@ export async function runAsWorker() {
               imageObjects.length,
               existingManifestMap,
               legacyLivePhotoMap,
-              {
-                isForceMode: process.env.FORCE_MODE === 'true',
-                isForceManifest: process.env.FORCE_MANIFEST === 'true',
-                isForceThumbnails: process.env.FORCE_THUMBNAILS === 'true',
-              },
+              batchProcessorOptions,
               builder,
+              {
+                runState: pluginRunState,
+                builderOptions: batchBuilderOptions,
+              },
             )
 
             // 添加成功结果
