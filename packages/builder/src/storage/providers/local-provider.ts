@@ -3,6 +3,11 @@ import fs from 'node:fs/promises'
 import path from 'node:path'
 import { fileURLToPath } from 'node:url'
 
+import {
+  CompatibleLoggerAdapter,
+} from '@afilmory/builder/photo/logger-adapter.js'
+import consola from 'consola'
+
 import { SUPPORTED_FORMATS } from '../../constants/index.js'
 import { logger } from '../../logger/index.js'
 import type { LocalConfig, StorageObject, StorageProvider } from '../interfaces'
@@ -23,6 +28,8 @@ export class LocalStorageProvider implements StorageProvider {
     currentPath: '',
     filesScanned: 0,
   }
+
+  private logger = new CompatibleLoggerAdapter(consola.withTag('LOCAL'))
 
   constructor(config: LocalConfig) {
     if (!config.basePath || config.basePath.trim() === '') {
@@ -68,9 +75,9 @@ export class LocalStorageProvider implements StorageProvider {
     }
   }
 
-  async getFile(key: string, logger?: any): Promise<Buffer | null> {
+  async getFile(key: string): Promise<Buffer | null> {
     try {
-      logger?.info(`读取本地文件：${key}`)
+      this.logger.info(`读取本地文件：${key}`)
       const startTime = Date.now()
 
       const filePath = path.join(this.basePath, key)
@@ -80,7 +87,7 @@ export class LocalStorageProvider implements StorageProvider {
       const resolvedBasePath = path.resolve(this.basePath)
 
       if (!resolvedPath.startsWith(resolvedBasePath)) {
-        logger?.error(`文件路径不安全：${key}`)
+        this.logger.error(`文件路径不安全：${key}`)
         return null
       }
 
@@ -88,7 +95,7 @@ export class LocalStorageProvider implements StorageProvider {
       try {
         await fs.access(filePath)
       } catch {
-        logger?.warn(`文件不存在：${key}`)
+        this.logger.warn(`文件不存在：${key}`)
         return null
       }
 
@@ -96,14 +103,14 @@ export class LocalStorageProvider implements StorageProvider {
 
       const duration = Date.now() - startTime
       const sizeKB = Math.round(buffer.length / 1024)
-      logger?.success(`读取完成：${key} (${sizeKB}KB, ${duration}ms)`)
+      this.logger.success(`读取完成：${key} (${sizeKB}KB, ${duration}ms)`)
 
       return buffer
     } catch (error) {
       const errorType = error instanceof Error ? error.name : 'UnknownError'
       const errorMessage =
         error instanceof Error ? error.message : String(error)
-      logger?.error(`[${errorType}] 读取文件失败：${key} - ${errorMessage}`)
+      this.logger.error(`[${errorType}] 读取文件失败：${key} - ${errorMessage}`)
       return null
     }
   }

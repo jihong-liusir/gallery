@@ -1,4 +1,3 @@
-import type { Logger } from '../logger/index.js'
 
 // 扫描进度接口
 export interface ScanProgress {
@@ -26,7 +25,7 @@ export interface StorageProvider {
    * @param logger 可选的日志记录器
    * @returns 文件的 Buffer 数据，如果不存在则返回 null
    */
-  getFile: (key: string, logger?: Logger['s3']) => Promise<Buffer | null>
+  getFile: (key: string) => Promise<Buffer | null>
 
   /**
    * 列出存储中的所有图片文件

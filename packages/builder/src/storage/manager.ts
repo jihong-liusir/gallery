@@ -1,4 +1,3 @@
-import type { Logger } from '../logger/index.js'
 import { StorageFactory } from './factory.js'
 import type {
   StorageConfig,
@@ -19,8 +18,8 @@ export class StorageManager {
    * @param logger 可选的日志记录器
    * @returns 文件的 Buffer 数据，如果不存在则返回 null
    */
-  async getFile(key: string, logger?: Logger['s3']): Promise<Buffer | null> {
-    return this.provider.getFile(key, logger)
+  async getFile(key: string): Promise<Buffer | null> {
+    return this.provider.getFile(key)
   }
 
   /**

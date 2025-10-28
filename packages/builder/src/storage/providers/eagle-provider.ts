@@ -3,8 +3,8 @@ import path from 'node:path'
 
 import { SUPPORTED_FORMATS } from '@afilmory/builder/constants/index.js'
 import { workdir } from '@afilmory/builder/path.js'
+import { getGlobalLoggers } from '@afilmory/builder/photo/logger-adapter.js'
 
-import type { Logger } from '../../logger/index.js'
 import { logger } from '../../logger/index.js'
 import type {
   EagleConfig,
@@ -146,7 +146,8 @@ export class EagleStorageProvider implements StorageProvider {
     this.folderIndex = buildFolderIndexes(libraryMetadata.folders ?? [])
   }
 
-  async getFile(key: string, logger?: Logger['s3']): Promise<Buffer | null> {
+  async getFile(key: string): Promise<Buffer | null> {
+    const logger = getGlobalLoggers().s3
     await this.initialize()
 
     const imageInfoPath = path.resolve(
@@ -156,7 +157,7 @@ export class EagleStorageProvider implements StorageProvider {
     )
     const infoStats = await fs.stat(imageInfoPath)
     if (!infoStats.isDirectory()) {
-      logger?.error?.(
+      logger.error(
         `EagleStorageProvider: 请求的文件路径不安全。key: ${key}, 路径: ${imageInfoPath}`,
       )
       return null
@@ -166,7 +167,7 @@ export class EagleStorageProvider implements StorageProvider {
       key,
     )
     if (!SUPPORTED_FORMATS.has(`.${imageMetadata.ext.toLowerCase()}`)) {
-      logger?.error?.(
+      logger.error(
         `EagleStorageProvider: 不支持的图片格式。key: ${key}, 格式: .${imageMetadata.ext}`,
       )
       return null
@@ -177,7 +178,7 @@ export class EagleStorageProvider implements StorageProvider {
       const buffer = await fs.readFile(imageFilePath)
       return buffer
     } catch (error) {
-      logger?.error?.(
+      logger.error(
         `EagleStorageProvider: 读取图片文件失败。key: ${key}, 路径: ${imageFilePath}, 错误: ${error}`,
       )
       return null

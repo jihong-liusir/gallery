@@ -1,7 +1,8 @@
 import path from 'node:path'
 
+import { getGlobalLoggers } from '@afilmory/builder/photo/logger-adapter.js'
+
 import { SUPPORTED_FORMATS } from '../../constants/index.js'
-import type { Logger } from '../../logger/index.js'
 import type {
   GitHubConfig,
   ProgressCallback,
@@ -85,11 +86,11 @@ export class GitHubStorageProvider implements StorageProvider {
     return normalizedKey
   }
 
-  async getFile(key: string, logger?: Logger['s3']): Promise<Buffer | null> {
-    const log = logger
+  async getFile(key: string): Promise<Buffer | null> {
+    const logger = getGlobalLoggers().s3
 
     try {
-      log?.info(`下载文件：${key}`)
+      logger.info(`下载文件：${key}`)
       const startTime = Date.now()
 
       const fullPath = this.getFullPath(key)
@@ -101,7 +102,7 @@ export class GitHubStorageProvider implements StorageProvider {
 
       if (!response.ok) {
         if (response.status === 404) {
-          log?.warn(`文件不存在：${key}`)
+          logger.warn(`文件不存在：${key}`)
           return null
         }
         throw new Error(
@@ -112,7 +113,7 @@ export class GitHubStorageProvider implements StorageProvider {
       const data = (await response.json()) as GitHubFileContent
 
       if (data.type !== 'file') {
-        log?.error(`路径不是文件：${key}`)
+        logger.error(`路径不是文件：${key}`)
         return null
       }
 
@@ -137,11 +138,11 @@ export class GitHubStorageProvider implements StorageProvider {
 
       const duration = Date.now() - startTime
       const sizeKB = Math.round(fileBuffer.length / 1024)
-      log?.success(`下载完成：${key} (${sizeKB}KB, ${duration}ms)`)
+      logger.success(`下载完成：${key} (${sizeKB}KB, ${duration}ms)`)
 
       return fileBuffer
     } catch (error) {
-      log?.error(`下载失败：${key}`, error)
+      logger.error(`下载失败：${key}`, error)
       return null
     }
   }
