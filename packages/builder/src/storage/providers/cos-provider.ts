@@ -67,29 +67,28 @@ export class COSStorageProvider implements StorageProvider {
         this.cosClient = new COS({
             SecretId: config.secretId,
             SecretKey: config.secretKey,
-            // Optional network configurations
-            ...(config.keepAlive && { KeepAlive: config.keepAlive }),
-            ...(config.maxSockets && { MaxSockets: config.maxSockets }),
-            ...(config.connectionTimeoutMs && { Timeout: config.connectionTimeoutMs }),
-            ...(config.requestTimeoutMs && { RequestTimeout: config.requestTimeoutMs }),
-        })
-        this.limiter = new Semaphore(this.config.downloadConcurrency ?? 16)
+            // Network configurations - use explicit timeout values
+            KeepAlive: config.keepAlive ?? true,
+            // COS SDK timeout in milliseconds (applies to both connection and request)
+            Timeout: config.requestTimeoutMs ?? 180_000, // Request timeout (3 min default)
+        } as any) // COS SDK types are incomplete, cast to any
+        this.limiter = new Semaphore(this.config.downloadConcurrency ?? 4)
     } async getFile(key: string): Promise<Buffer | null> {
         return await this.limiter.run(async () => {
             const maxAttempts = this.config.maxAttempts ?? 3
-            const totalTimeoutMs = this.config.totalTimeoutMs ?? 60_000
-            const idleTimeoutMs = this.config.idleTimeoutMs ?? 10_000
+            const totalTimeoutMs = this.config.totalTimeoutMs ?? 300_000 // 5 minutes default
+            const requestTimeoutMs = this.config.requestTimeoutMs ?? 120_000 // 2 minutes default
 
             for (let attempt = 1; attempt <= maxAttempts; attempt++) {
                 const startTime = Date.now()
-                let firstByteAt: number | null = null
 
                 try {
                     logger.s3.info(`下载开始：${key} (attempt ${attempt}/${maxAttempts})`)
 
                     const response = await new Promise<any>((resolve, reject) => {
+                        // Use the more generous totalTimeout as fallback
                         const timer = setTimeout(() => {
-                            reject(new Error('Total timeout exceeded'))
+                            reject(new Error(`Total timeout exceeded after ${totalTimeoutMs}ms`))
                         }, totalTimeoutMs)
 
                         this.cosClient.getObject({
@@ -114,25 +113,29 @@ export class COSStorageProvider implements StorageProvider {
                     // COS SDK 返回的 Body 是 Buffer
                     const buffer = response.Body as Buffer
                     const duration = Date.now() - startTime
-                    const sizeKB = Math.round(buffer.length / 1024)
+                    const sizeMB = (buffer.length / 1024 / 1024).toFixed(2)
+                    const speedMBps = (buffer.length / 1024 / 1024 / (duration / 1000)).toFixed(2)
                     logger.s3.success(
-                        `下载完成：${key} (${sizeKB}KB, ${duration}ms, attempt ${attempt})`,
+                        `下载完成：${key} (${sizeMB}MB in ${duration}ms = ${speedMBps}MB/s, attempt ${attempt})`,
                     )
                     return buffer
-                } catch (error) {
+                } catch (error: any) {
                     const elapsed = Date.now() - startTime
+                    const errorMsg = error?.message || String(error)
+                    const isTimeout = errorMsg.includes('timeout') || errorMsg.includes('ETIMEDOUT') || errorMsg.includes('ESOCKETTIMEDOUT')
+
                     logger.s3.warn(
-                        `下载失败：${key} (attempt ${attempt}/${maxAttempts}, ${elapsed}ms)`,
-                        error,
+                        `下载失败：${key} (${isTimeout ? 'TIMEOUT' : 'ERROR'}, attempt ${attempt}/${maxAttempts}, ${elapsed}ms) - ${errorMsg}`,
                     )
 
                     if (attempt < maxAttempts) {
-                        const delay = backoffDelay(attempt)
+                        // Use exponential backoff with longer delays for timeouts
+                        const delay = isTimeout ? backoffDelay(attempt) * 2 : backoffDelay(attempt)
                         logger.s3.info(`等待 ${delay}ms 后重试：${key}`)
                         await sleep(delay)
                         continue
                     }
-                    logger.s3.error(`下载最终失败：${key}`)
+                    logger.s3.error(`下载最终失败：${key} - ${errorMsg}`)
                     return null
                 }
             }

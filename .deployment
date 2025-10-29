@@ -1,0 +1,6 @@
+# Azure App Service deployment configuration
+# .deployment file tells Azure how to build your app
+
+[config]
+# Use the SSR app as the deployment target
+project = apps/ssr

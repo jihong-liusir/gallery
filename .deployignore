@@ -1,0 +1,33 @@
+# Azure Deployment - Ignore these files/folders to speed up deployment
+
+# Source files (we deploy built files only)
+apps/web/src/
+apps/web/scripts/
+apps/ssr/scripts/
+
+# Build artifacts we don't need
+apps/web/dist/
+.git/
+.vscode/
+
+# Development dependencies
+node_modules/
+
+# Environment files
+.env.local
+.env.development
+.env.test
+
+# Documentation
+*.md
+!README.md
+
+# Test files
+**/*.test.ts
+**/*.test.tsx
+**/*.spec.ts
+
+# Large files
+photos/
+thumbnails/
+.cache/

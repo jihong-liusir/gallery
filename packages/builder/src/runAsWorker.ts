@@ -14,6 +14,25 @@ import type {
   TaskResult,
 } from './worker/cluster-pool'
 
+// Safe wrapper for process.send to prevent EPIPE errors
+function safeSend(message: any): boolean {
+  if (!process.send || !process.connected) {
+    return false
+  }
+
+  try {
+    process.send(message)
+    return true
+  } catch (error) {
+    // Silently ignore EPIPE errors - parent process has disconnected
+    if ((error as any)?.code === 'EPIPE' || (error as any)?.code === 'ERR_IPC_CHANNEL_CLOSED') {
+      return false
+    }
+    // Re-throw other errors
+    throw error
+  }
+}
+
 // 新增接口定义
 interface WorkerInitMessage {
   type: 'init'
@@ -27,7 +46,7 @@ interface SharedData {
   existingManifestMap: Map<string, PhotoManifestItem>
   livePhotoMap: Map<string, StorageObject>
   imageObjects: StorageObject[]
-  builderConfig: BuilderConfig
+  configCwd: string // Directory to load config from
 }
 
 // Worker 进程处理逻辑
@@ -58,7 +77,14 @@ export async function runAsWorker() {
     imageObjects = sharedData.imageObjects
     existingManifestMap = sharedData.existingManifestMap
     livePhotoMap = sharedData.livePhotoMap
-    builder = new AfilmoryBuilder(sharedData.builderConfig)
+
+    // Workers load their own config to avoid serializing functions (plugins)
+    const { loadBuilderConfig } = await import('./config/index.js')
+    const builderConfig = await loadBuilderConfig({
+      cwd: sharedData.configCwd,
+    })
+
+    builder = new AfilmoryBuilder(builderConfig)
     await builder.ensurePluginsReady()
     pluginRunState = builder.createPluginRunState()
 
@@ -139,9 +165,7 @@ export async function runAsWorker() {
         result,
       }
 
-      if (process.send) {
-        process.send(response)
-      }
+      safeSend(response)
     } catch (error) {
       // 发送错误回主进程
       const response: TaskResult = {
@@ -150,9 +174,7 @@ export async function runAsWorker() {
         error: error instanceof Error ? error.message : String(error),
       }
 
-      if (process.send) {
-        process.send(response)
-      }
+      safeSend(response)
     }
   }
 
@@ -248,9 +270,7 @@ export async function runAsWorker() {
         results,
       }
 
-      if (process.send) {
-        process.send(response)
-      }
+      safeSend(response)
     } catch (error) {
       // 如果批量处理失败，为每个任务发送错误结果
       const results: TaskResult[] = message.tasks.map((task) => ({
@@ -264,9 +284,7 @@ export async function runAsWorker() {
         results,
       }
 
-      if (process.send) {
-        process.send(response)
-      }
+      safeSend(response)
     }
   }
 
@@ -283,14 +301,14 @@ export async function runAsWorker() {
     ) => {
       if (message.type === 'shutdown') {
         process.removeAllListeners('message')
+        // Give time for any pending sends to complete before exiting
+        setTimeout(() => process.exit(0), 100)
         return
       }
 
       if (message.type === 'ping') {
         // 响应主进程的 ping，表示 worker 已准备好
-        if (process.send) {
-          process.send({ type: 'pong', workerId })
-        }
+        safeSend({ type: 'pong', workerId })
         return
       }
 
@@ -298,9 +316,7 @@ export async function runAsWorker() {
         // 处理初始化消息
         try {
           await initializeWorker(message.sharedData)
-          if (process.send) {
-            process.send({ type: 'init-complete', workerId })
-          }
+          safeSend({ type: 'init-complete', workerId })
         } catch (error) {
           console.error('Worker initialization failed', error)
           process.exit(1)
@@ -336,7 +352,5 @@ export async function runAsWorker() {
   })
 
   // 告知主进程 worker 已准备好
-  if (process.send) {
-    process.send({ type: 'ready', workerId })
-  }
+  safeSend({ type: 'ready', workerId })
 }

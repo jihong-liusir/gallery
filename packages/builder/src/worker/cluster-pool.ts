@@ -9,6 +9,24 @@ import type { Logger } from '../logger/index.js'
 import { logger } from '../logger/index.js'
 import type { BuilderConfig } from '../types/config.js'
 
+// Safe wrapper for worker.send to prevent EPIPE errors
+function safeWorkerSend(worker: Worker, message: any): boolean {
+  if (!worker.isConnected()) {
+    return false
+  }
+
+  try {
+    return worker.send(message)
+  } catch (error) {
+    // Silently ignore EPIPE errors - worker has disconnected
+    if ((error as any)?.code === 'EPIPE' || (error as any)?.code === 'ERR_IPC_CHANNEL_CLOSED') {
+      return false
+    }
+    // Re-throw other errors
+    throw error
+  }
+}
+
 export interface ClusterPoolOptions {
   concurrency: number
   totalTasks: number
@@ -19,7 +37,7 @@ export interface ClusterPoolOptions {
     existingManifestMap: Map<string, any>
     livePhotoMap: Map<string, any>
     imageObjects: any[]
-    builderConfig: BuilderConfig
+    configCwd: string // Pass the config directory instead of the config itself
   }
 }
 
@@ -281,11 +299,13 @@ export class ClusterPool<T> extends EventEmitter {
       // 首次准备就绪时发送初始化数据，但不立即标记为 ready
       if (this.sharedData) {
         // 使用 v8.serialize 序列化数据以保持类型完整性
+        // Note: We don't serialize builderConfig because it contains functions (plugins)
+        // Workers will load the config themselves from the same directory
         const serializedBuffer = serialize({
           existingManifestMap: this.sharedData.existingManifestMap,
           livePhotoMap: this.sharedData.livePhotoMap,
           imageObjects: this.sharedData.imageObjects,
-          builderConfig: this.sharedData.builderConfig,
+          configCwd: this.sharedData.configCwd,
         })
 
         // 将 Buffer 转换为数组以通过 IPC 传输
@@ -296,7 +316,7 @@ export class ClusterPool<T> extends EventEmitter {
             length: serializedBuffer.length,
           },
         }
-        worker.send(initMessage)
+        safeWorkerSend(worker, initMessage)
         workerLogger.info(`发送初始化数据到 Worker ${workerId}`)
       }
 
@@ -392,7 +412,7 @@ export class ClusterPool<T> extends EventEmitter {
       workerId,
     }
 
-    worker.send(message)
+    safeWorkerSend(worker, message)
 
     const workerLogger = this.logger.worker(workerId)
     workerLogger.info(
@@ -526,18 +546,30 @@ export class ClusterPool<T> extends EventEmitter {
     for (const [, worker] of this.workers) {
       shutdownPromises.push(
         new Promise((resolve) => {
+          // Give workers 2 seconds to gracefully shutdown before force killing
           const timeout = setTimeout(() => {
             worker.kill('SIGKILL')
             resolve()
-          }, 0)
+          }, 2000)
 
           worker.on('exit', () => {
             clearTimeout(timeout)
             resolve()
           })
 
-          // 发送关闭信号
-          worker.send({ type: 'shutdown' })
+          // Send shutdown signal and disconnect IPC to prevent EPIPE errors
+          try {
+            safeWorkerSend(worker, { type: 'shutdown' })
+            // Disconnect after a short delay to allow message to be sent
+            setTimeout(() => {
+              if (worker.isConnected()) {
+                worker.disconnect()
+              }
+            }, 100)
+          } catch (error) {
+            // Worker may already be disconnected, that's okay
+            worker.kill('SIGTERM')
+          }
         }),
       )
     }

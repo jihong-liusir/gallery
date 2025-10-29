@@ -51,5 +51,7 @@
   ],
   "exportall.config.folderListener": [
     "/apps/ssr/src/schemas"
-  ]
+  ],
+  "appService.defaultWebAppToDeploy": "/subscriptions/450274cd-681d-478b-a2bc-b7b45a7a782e/resourceGroups/rg-gallery/providers/Microsoft.Web/sites/gallery-tu",
+  "appService.deploySubpath": "."
 }

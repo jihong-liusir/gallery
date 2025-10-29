@@ -1,4 +1,5 @@
 import path from 'node:path'
+import { fileURLToPath } from 'node:url'
 
 import { thumbnailExists } from '../image/thumbnail.js'
 import { logger } from '../logger/index.js'
@@ -259,7 +260,7 @@ export class AfilmoryBuilder {
               existingManifestMap,
               livePhotoMap,
               imageObjects: tasksToProcess,
-              builderConfig: this.getConfig(),
+              configCwd: path.join(fileURLToPath(import.meta.url), '../../../../..'), // Project root, same as cli.ts
             },
           })
 

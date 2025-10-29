@@ -1,0 +1,19 @@
+{
+    "name": "@afilmory/gallery-azure",
+    "version": "1.0.0",
+    "description": "Gallery application for Azure App Service",
+    "main": "apps/ssr/server.js",
+    "type": "module",
+    "engines": {
+        "node": ">=20.0.0",
+        "pnpm": ">=9.0.0"
+    },
+    "scripts": {
+        "build": "bash deploy.sh",
+        "start": "cd apps/ssr && node server.js",
+        "postinstall": "pnpm install --frozen-lockfile"
+    },
+    "dependencies": {
+        "pnpm": "10.19.0"
+    }
+}

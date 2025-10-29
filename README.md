@@ -212,3 +212,64 @@ Attribution Network License (ANL) v1.0 © 2025 Afilmory Team. See [LICENSE](LICE
 ---
 
 If this project helps you, please give it a ⭐️ Star for support!
+
+## Jihong chats with Claude Sonnet
+Yes, you need to rebuild the manifest when new photos are added to remote storage. Let me explain the workflow and whether you need to redeploy:
+
+Workflow for New Photos
+1. Rebuild Manifest (Required)
+When new photos are added to your remote storage (S3/GitHub/COS):
+
+This command will:
+
+Download new photos from remote storage
+Process EXIF metadata, GPS data, camera info
+Generate thumbnails and blurhash placeholders
+Update photos-manifest.json with new photo data
+2. Deployment (Depends on Your Setup)
+You have two deployment scenarios:
+
+Scenario A: Manifest Stored in Git Repository
+If your builder.config.ts is configured to push manifest updates to a git repository:
+
+You DON'T need to redeploy the app because:
+
+The SPA fetches the manifest from the remote repository at runtime
+Users will see new photos automatically after manifest is pushed to git
+The app dynamically loads photos-manifest.json from the configured source
+Scenario B: Manifest Bundled with App
+If the manifest is bundled directly into your build:
+
+You MUST redeploy the app because:
+
+The manifest is embedded in window.__MANIFEST__ during build
+New photos won't appear until you rebuild and redeploy
+Check Your Configuration
+Let me check your builder config to see which scenario applies to you:
+
+Read builder.config.ts
+
+Based on your configuration:
+
+Your Setup: Manifest Bundled with App ⚠️
+Your builder.config.ts shows:
+
+This means you MUST redeploy the app after adding new photos.
+
+Complete Workflow for New Photos
+Optional: Enable Dynamic Manifest Loading
+If you want to avoid redeployment for new photos, you can:
+
+Enable Git Repository Sync
+Update your builder.config.ts:
+
+With this enabled:
+
+Run pnpm run build:manifest - it will push manifest to git
+No app redeployment needed - users see new photos automatically
+The SPA fetches the manifest from the git repository at runtime
+Trade-offs
+Approach	Pros	Cons
+Current (Bundled)	Faster load time, no external dependency	Must redeploy for new photos
+Git Sync (Dynamic)	No redeployment needed, update photos anytime	Extra HTTP request, slight delay
+For most use cases, enabling git sync is more convenient if you frequently add new photos. Would you like help setting up the git repository sync?
