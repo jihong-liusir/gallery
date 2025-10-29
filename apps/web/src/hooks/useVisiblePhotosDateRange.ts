@@ -88,22 +88,41 @@ export const useVisiblePhotosDateRange = (_photos: PhotoManifest[]) => {
         // 如果照片有位置标签，优先使用
         if (photo.tags) {
           const locationTag = photo.tags.find(
-            (tag) =>
-              tag.includes('省') ||
-              tag.includes('市') ||
-              tag.includes('区') ||
-              tag.includes('县') ||
-              tag.includes('镇') ||
-              tag.includes('村') ||
-              tag.includes('街道') ||
-              tag.includes('路') ||
-              tag.includes('北京') ||
-              tag.includes('上海') ||
-              tag.includes('广州') ||
-              tag.includes('深圳') ||
-              tag.includes('杭州') ||
-              tag.includes('南京') ||
-              tag.includes('成都'),
+            (tag) => {
+              // Chinese location keywords
+              const chineseLocations = [
+                '省', '市', '区', '县', '镇', '村', '街道', '路',
+                '北京', '上海', '广州', '深圳', '杭州', '南京', '成都'
+              ]
+
+              // International location keywords (case-insensitive)
+              const internationalLocations = [
+                'city', 'town', 'village', 'street', 'avenue', 'road', 'park',
+                'new york', 'london', 'paris', 'tokyo', 'berlin', 'sydney',
+                'los angeles', 'chicago', 'boston', 'seattle', 'san francisco',
+                'washington', 'miami', 'las vegas', 'toronto', 'vancouver'
+              ]
+
+              // Check Chinese locations
+              if (chineseLocations.some(loc => tag.includes(loc))) {
+                return true
+              }
+
+              // Check international locations (case-insensitive)
+              const tagLower = tag.toLowerCase()
+              if (internationalLocations.some(loc => tagLower.includes(loc.toLowerCase()))) {
+                return true
+              }
+
+              // Check for common location patterns
+              const locationPatterns = [
+                /\b\w+\s+(city|town|village|park|center|square|station)\b/i,
+                /\b(mount|mt|lake|river|beach|island)\s+\w+/i,
+                /\b\w+\s+(county|state|province|district)\b/i
+              ]
+
+              return locationPatterns.some(pattern => pattern.test(tag))
+            }
           )
           if (locationTag) {
             return locationTag
